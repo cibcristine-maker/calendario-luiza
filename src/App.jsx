@@ -148,6 +148,17 @@ export default function App() {
   });
   const totalMarked = counts.azul + counts.laranja + counts.vermelho;
 
+  const diasRuins = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = fmtKey(y, m, d);
+    const entry = data[key];
+    if (!entry) continue;
+    const periodosRuins = PERIODOS.filter((p) => entry[p.key] === "vermelho").map((p) => p.label);
+    if (periodosRuins.length > 0) {
+      diasRuins.push({ dia: d, periodos: periodosRuins, nota: entry.nota || "" });
+    }
+  }
+
   const changeMonth = (delta) => {
     let nm = m + delta, ny = y;
     if (nm < 0) { nm = 11; ny--; }
@@ -413,6 +424,25 @@ export default function App() {
                       <div key={key} style={{ fontSize: 13, color: "#33404D" }}>
                         <span style={{ fontWeight: 800 }}>{counts[key]}</span>
                         <span style={{ color: "#8A93A0" }}> {c.label.toLowerCase()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {diasRuins.length > 0 && (
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #F0EBDF" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#B3AC9C", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+                    Comportamentos difíceis do mês
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {diasRuins.map((item) => (
+                      <div key={item.dia} style={{ border: "1px solid #F6E9E6", background: "#FBF4F3", borderRadius: 10, padding: "8px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: item.nota ? 4 : 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#33404D" }}>Dia {item.dia}</span>
+                          <span style={{ fontSize: 11, color: "#C6604F", fontWeight: 600 }}>{item.periodos.join(", ")}</span>
+                        </div>
+                        {item.nota && <div style={{ fontSize: 12, color: "#5C6672" }}>{item.nota}</div>}
                       </div>
                     ))}
                   </div>
