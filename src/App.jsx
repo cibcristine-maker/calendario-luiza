@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer, Download } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -46,6 +48,8 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [userName, setUserName] = useState(() => localStorage.getItem(USER_KEY) || "");
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const printRef = useRef(null);
 
   useEffect(() => {
     let channel;
@@ -153,7 +157,33 @@ export default function App() {
 
   const isToday = (d) => d === today.getDate() && m === today.getMonth() && y === today.getFullYear();
 
-  const doPrint = () => window.print();
+  const doPrint = async () => {
+    if (!printRef.current) return;
+    setGerandoPdf(true);
+    try {
+      const canvas = await html2canvas(printRef.current, { scale: 2, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgRatio = canvas.height / canvas.width;
+      let renderWidth = pageWidth - 16;
+      let renderHeight = renderWidth * imgRatio;
+      if (renderHeight > pageHeight - 16) {
+        renderHeight = pageHeight - 16;
+        renderWidth = renderHeight / imgRatio;
+      }
+      const x = (pageWidth - renderWidth) / 2;
+      const y = (pageHeight - renderHeight) / 2;
+      pdf.addImage(imgData, "PNG", x, y, renderWidth, renderHeight);
+      pdf.save(`calendario-luiza-${MESES[m].toLowerCase()}-${y}.pdf`);
+    } catch (e) {
+      console.error("Erro ao gerar PDF", e);
+      alert("Não foi possível gerar o PDF. Tenta novamente.");
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
 
   if (!userName) {
     return (
@@ -325,11 +355,11 @@ export default function App() {
 
         {tab === "dashboard" && (
           <>
-            <button onClick={doPrint} className="no-print" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", background: "#33404D", color: "#fff", border: "none", borderRadius: 12, padding: 12, fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-              <Printer size={16} /> Imprimir este mês
+            <button onClick={doPrint} disabled={gerandoPdf} className="no-print" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", background: "#33404D", color: "#fff", border: "none", borderRadius: 12, padding: 12, fontWeight: 700, fontSize: 14, marginBottom: 16, opacity: gerandoPdf ? 0.7 : 1 }}>
+              <Download size={16} /> {gerandoPdf ? "Gerando PDF..." : "Baixar PDF deste mês"}
             </button>
 
-            <div id="print-area" style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF" }}>
+            <div id="print-area" ref={printRef} style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF" }}>
               <div className="print-title" style={{ fontFamily: "Georgia, serif", fontSize: 20, color: "#33404D", marginBottom: 4, fontWeight: 600 }}>
                 Luiza — {MESES[m]} de {y}
               </div>
