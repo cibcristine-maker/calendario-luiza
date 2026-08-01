@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, X, Check } from "lucide-react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer } from "lucide-react";
 import { supabase } from "./supabaseClient";
 
 const MESES = [
@@ -9,10 +9,23 @@ const MESES = [
 const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
 
 const CORES = {
-  azul: { hex: "#5B8FB0", label: "Dia tranquilo", bg: "#EAF2F7" },
-  amarelo: { hex: "#E0A835", label: "Dia médio", bg: "#FBF3E3" },
-  vermelho: { hex: "#C6604F", label: "Dia difícil", bg: "#F6E9E6" },
+  azul: { hex: "#5B8FB0", label: "Bom comportamento", bg: "#EAF2F7" },
+  laranja: { hex: "#E08A35", label: "Comportamento razoável", bg: "#FBEBDC" },
+  vermelho: { hex: "#C6604F", label: "Comportamento ruim", bg: "#F6E9E6" },
 };
+
+const PERIODOS = [
+  { key: "manha", label: "Manhã" },
+  { key: "tarde", label: "Tarde" },
+  { key: "noite", label: "Noite" },
+];
+
+const PESSOAS = [
+  { nome: "Eduardo", papel: "Pai" },
+  { nome: "Cibele", papel: "Mãe" },
+  { nome: "Danielle", papel: "Terapeuta" },
+  { nome: "Ana Moya", papel: "Neuropsicóloga" },
+];
 
 const USER_KEY = "luiza_app_user";
 
@@ -20,17 +33,20 @@ function fmtKey(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+function isEmptyEntry(e) {
+  return !e || (!e.manha && !e.tarde && !e.noite && !e.nota);
+}
+
 export default function App() {
   const today = new Date();
+  const [tab, setTab] = useState("calendario");
   const [cursor, setCursor] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [data, setData] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [userName, setUserName] = useState(() => localStorage.getItem(USER_KEY) || "");
-  const [nameDraft, setNameDraft] = useState("");
 
-  // Load all entries + subscribe to realtime changes
   useEffect(() => {
     let channel;
 
@@ -39,7 +55,7 @@ export default function App() {
       if (!error && rows) {
         const map = {};
         rows.forEach((r) => {
-          map[r.date] = { cor: r.cor, nota: r.nota, updated_by: r.updated_by };
+          map[r.date] = { manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by };
         });
         setData(map);
       }
@@ -57,7 +73,7 @@ export default function App() {
             delete next[payload.old.date];
           } else {
             const r = payload.new;
-            next[r.date] = { cor: r.cor, nota: r.nota, updated_by: r.updated_by };
+            next[r.date] = { manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by };
           }
           return next;
         });
@@ -69,8 +85,8 @@ export default function App() {
     };
   }, []);
 
-  const upsertDay = useCallback(async (key, cor, nota) => {
-    if (!cor && !nota) {
+  const persistEntry = useCallback(async (key, entry) => {
+    if (isEmptyEntry(entry)) {
       await supabase.from("entries").delete().eq("date", key);
       setData((prev) => {
         const next = { ...prev };
@@ -79,21 +95,29 @@ export default function App() {
       });
       return;
     }
-    const record = { date: key, cor: cor || null, nota: nota || null, updated_by: userName || null, updated_at: new Date().toISOString() };
+    const record = {
+      date: key,
+      manha: entry.manha || null,
+      tarde: entry.tarde || null,
+      noite: entry.noite || null,
+      nota: entry.nota || null,
+      updated_by: userName || null,
+      updated_at: new Date().toISOString(),
+    };
     await supabase.from("entries").upsert(record);
-    setData((prev) => ({ ...prev, [key]: { cor: cor || null, nota: nota || null, updated_by: userName || null } }));
+    setData((prev) => ({ ...prev, [key]: { manha: entry.manha || null, tarde: entry.tarde || null, noite: entry.noite || null, nota: entry.nota || null, updated_by: userName || null } }));
   }, [userName]);
 
-  const setDay = (key, color) => {
+  const setPeriod = (key, periodKey, color) => {
     const current = data[key] || {};
-    const newColor = current.cor === color ? null : color;
-    upsertDay(key, newColor, current.nota);
+    const newColor = current[periodKey] === color ? null : color;
+    persistEntry(key, { ...current, [periodKey]: newColor });
   };
 
   const saveNote = () => {
     if (!selected) return;
     const current = data[selected] || {};
-    upsertDay(selected, current.cor, noteDraft.trim() || null);
+    persistEntry(selected, { ...current, nota: noteDraft.trim() || null });
   };
 
   const openDay = (key) => {
@@ -101,11 +125,9 @@ export default function App() {
     setNoteDraft(data[key]?.nota || "");
   };
 
-  const saveName = () => {
-    const n = nameDraft.trim();
-    if (!n) return;
-    localStorage.setItem(USER_KEY, n);
-    setUserName(n);
+  const chooseName = (nome) => {
+    localStorage.setItem(USER_KEY, nome);
+    setUserName(nome);
   };
 
   const { y, m } = cursor;
@@ -116,9 +138,11 @@ export default function App() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   const monthEntries = Object.entries(data).filter(([k]) => k.startsWith(`${y}-${String(m + 1).padStart(2, "0")}`));
-  const counts = { azul: 0, amarelo: 0, vermelho: 0 };
-  monthEntries.forEach(([, v]) => { if (v.cor) counts[v.cor]++; });
-  const totalMarked = counts.azul + counts.amarelo + counts.vermelho;
+  const counts = { azul: 0, laranja: 0, vermelho: 0 };
+  monthEntries.forEach(([, v]) => {
+    PERIODOS.forEach((p) => { if (v[p.key]) counts[v[p.key]]++; });
+  });
+  const totalMarked = counts.azul + counts.laranja + counts.vermelho;
 
   const changeMonth = (delta) => {
     let nm = m + delta, ny = y;
@@ -129,7 +153,8 @@ export default function App() {
 
   const isToday = (d) => d === today.getDate() && m === today.getMonth() && y === today.getFullYear();
 
-  // First-time name gate so notes/edits are attributed to a person
+  const doPrint = () => window.print();
+
   if (!userName) {
     return (
       <div style={{ minHeight: "100vh", background: "#F7F4EE", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "-apple-system, 'Segoe UI', Roboto, sans-serif" }}>
@@ -138,17 +163,22 @@ export default function App() {
             Diário de acompanhamento
           </div>
           <h1 style={{ fontFamily: "Georgia, serif", fontSize: 24, color: "#33404D", margin: "0 0 14px" }}>Luiza</h1>
-          <p style={{ fontSize: 13, color: "#5C6672", marginBottom: 14 }}>Como podemos te identificar nas anotações?</p>
-          <input
-            value={nameDraft}
-            onChange={(e) => setNameDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && saveName()}
-            placeholder="Seu nome"
-            style={{ width: "100%", borderRadius: 12, border: "1px solid #EDE8DB", padding: 12, fontSize: 14, marginBottom: 14, boxSizing: "border-box" }}
-          />
-          <button onClick={saveName} style={{ width: "100%", background: "#33404D", color: "#fff", border: "none", borderRadius: 12, padding: 13, fontWeight: 700, fontSize: 14 }}>
-            Entrar
-          </button>
+          <p style={{ fontSize: 13, color: "#5C6672", marginBottom: 14 }}>Quem está entrando?</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {PESSOAS.map((p) => (
+              <button
+                key={p.nome}
+                onClick={() => chooseName(p.nome)}
+                style={{
+                  width: "100%", textAlign: "left", borderRadius: 12, border: "1px solid #EDE8DB",
+                  background: "#FBFAF7", padding: "12px 14px", display: "flex", flexDirection: "column",
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#33404D" }}>{p.nome}</span>
+                <span style={{ fontSize: 12, color: "#8A93A0" }}>{p.papel}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -163,10 +193,26 @@ export default function App() {
         .day-cell:active { transform: scale(0.94); }
         .color-btn { transition: transform 0.12s ease; }
         .color-btn:active { transform: scale(0.92); }
+
+        @media print {
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area {
+            position: absolute; left: 0; top: 0; width: 100%;
+            padding: 10mm;
+          }
+          @page { size: A4 landscape; margin: 8mm; }
+          .print-title { font-size: 28px !important; }
+          .print-day-num { font-size: 20px !important; }
+          .print-cell { min-height: 90px !important; padding: 8px !important; }
+          .print-chip { width: 16px !important; height: 16px !important; }
+          .print-legend-dot { width: 16px !important; height: 16px !important; }
+          .print-legend-text { font-size: 14px !important; }
+        }
       `}</style>
 
-      <div style={{ width: "100%", maxWidth: 420 }}>
-        <div style={{ marginBottom: 22, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div style={{ width: "100%", maxWidth: 460 }}>
+        <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }} className="no-print">
           <div>
             <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: "#A98F5E", fontWeight: 700, marginBottom: 4 }}>
               Diário de acompanhamento
@@ -176,7 +222,31 @@ export default function App() {
           <div style={{ fontSize: 11, color: "#B3AC9C" }}>{userName}</div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }} className="no-print">
+          <button
+            onClick={() => setTab("calendario")}
+            style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "10px 0", borderRadius: 12, border: tab === "calendario" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "calendario" ? "#33404D" : "#fff", color: tab === "calendario" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+            }}
+          >
+            <CalendarIcon size={15} /> Calendário
+          </button>
+          <button
+            onClick={() => setTab("dashboard")}
+            style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "10px 0", borderRadius: 12, border: tab === "dashboard" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "dashboard" ? "#33404D" : "#fff", color: tab === "dashboard" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+            }}
+          >
+            <BarChart3 size={15} /> Dashboard
+          </button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }} className="no-print">
           <button onClick={() => changeMonth(-1)} aria-label="Mês anterior" style={{ background: "#fff", border: "1px solid #E7E1D4", borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <ChevronLeft size={18} color="#33404D" />
           </button>
@@ -188,82 +258,144 @@ export default function App() {
           </button>
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 20, padding: 16, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 6 }}>
-            {DIAS_SEMANA.map((d, i) => (
-              <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#B3AC9C", padding: "4px 0" }}>{d}</div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
-            {!loaded && <div style={{ gridColumn: "span 7", textAlign: "center", padding: 24, color: "#B3AC9C", fontSize: 13 }}>Carregando...</div>}
-            {loaded && cells.map((d, i) => {
-              if (d === null) return <div key={i} />;
-              const key = fmtKey(y, m, d);
-              const entry = data[key];
-              const cor = entry?.cor;
-              return (
-                <button
-                  key={i}
-                  className="day-cell"
-                  onClick={() => openDay(key)}
-                  style={{
-                    position: "relative",
-                    height: 42,
-                    border: isToday(d) ? "1.5px solid #A98F5E" : "1px solid transparent",
-                    background: cor ? CORES[cor].bg : "#FBFAF7",
-                    borderRadius: 12,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: isToday(d) ? 800 : 600, color: "#33404D" }}>{d}</span>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: cor ? CORES[cor].hex : "transparent" }} />
-                  {entry?.nota && (
-                    <span style={{ position: "absolute", top: 3, right: 4, width: 4, height: 4, borderRadius: "50%", background: "#A98F5E" }} />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {tab === "calendario" && (
+          <>
+            <div style={{ background: "#fff", borderRadius: 20, padding: 16, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 6 }}>
+                {DIAS_SEMANA.map((d, i) => (
+                  <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#B3AC9C", padding: "4px 0" }}>{d}</div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+                {!loaded && <div style={{ gridColumn: "span 7", textAlign: "center", padding: 24, color: "#B3AC9C", fontSize: 13 }}>Carregando...</div>}
+                {loaded && cells.map((d, i) => {
+                  if (d === null) return <div key={i} />;
+                  const key = fmtKey(y, m, d);
+                  const entry = data[key];
+                  return (
+                    <button
+                      key={i}
+                      className="day-cell"
+                      onClick={() => openDay(key)}
+                      style={{
+                        position: "relative",
+                        height: 54,
+                        border: isToday(d) ? "1.5px solid #A98F5E" : "1px solid transparent",
+                        background: "#FBFAF7",
+                        borderRadius: 12,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: isToday(d) ? 800 : 600, color: "#33404D" }}>{d}</span>
+                      <div style={{ display: "flex", gap: 3 }}>
+                        {PERIODOS.map((p) => (
+                          <span
+                            key={p.key}
+                            style={{
+                              width: 9, height: 9, borderRadius: "50%",
+                              background: entry?.[p.key] ? CORES[entry[p.key]].hex : "#E3DFD2",
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {entry?.nota && (
+                        <span style={{ position: "absolute", top: 3, right: 4, width: 4, height: 4, borderRadius: "50%", background: "#A98F5E" }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-          {Object.entries(CORES).map(([key, c]) => (
-            <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#5C6672" }}>
-              <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.hex }} />
-              {c.label}
-            </div>
-          ))}
-        </div>
-
-        {totalMarked > 0 && (
-          <div style={{ marginTop: 18, background: "#fff", borderRadius: 16, padding: "14px 16px", border: "1px solid #F0EBDF" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#B3AC9C", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-              Resumo do mês
-            </div>
-            <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 10, background: "#F0EBDF" }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               {Object.entries(CORES).map(([key, c]) => (
-                counts[key] > 0 && <div key={key} style={{ width: `${(counts[key] / totalMarked) * 100}%`, background: c.hex }} />
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 16 }}>
-              {Object.entries(CORES).map(([key, c]) => (
-                <div key={key} style={{ fontSize: 13, color: "#33404D" }}>
-                  <span style={{ fontWeight: 800 }}>{counts[key]}</span>
-                  <span style={{ color: "#8A93A0" }}> {key}</span>
+                <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#5C6672" }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex }} />
+                  {c.label}
                 </div>
               ))}
             </div>
-          </div>
+            <div style={{ fontSize: 11, color: "#B3AC9C", marginTop: 6 }}>Cada dia tem 3 marcações: manhã, tarde e noite.</div>
+          </>
+        )}
+
+        {tab === "dashboard" && (
+          <>
+            <button onClick={doPrint} className="no-print" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", background: "#33404D", color: "#fff", border: "none", borderRadius: 12, padding: 12, fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
+              <Printer size={16} /> Imprimir este mês
+            </button>
+
+            <div id="print-area" style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF" }}>
+              <div className="print-title" style={{ fontFamily: "Georgia, serif", fontSize: 20, color: "#33404D", marginBottom: 4, fontWeight: 600 }}>
+                Luiza — {MESES[m]} de {y}
+              </div>
+              <div style={{ fontSize: 12, color: "#8A93A0", marginBottom: 14 }}>Diário de acompanhamento comportamental</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 6 }}>
+                {DIAS_SEMANA.map((d, i) => (
+                  <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#B3AC9C", padding: "4px 0" }}>{d}</div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+                {cells.map((d, i) => {
+                  if (d === null) return <div key={i} />;
+                  const key = fmtKey(y, m, d);
+                  const entry = data[key];
+                  return (
+                    <div key={i} className="print-cell" style={{ border: "1px solid #EDE8DB", borderRadius: 10, padding: 6, minHeight: 62 }}>
+                      <div className="print-day-num" style={{ fontSize: 12, fontWeight: 700, color: "#33404D", marginBottom: 4 }}>{d}</div>
+                      {PERIODOS.map((p) => (
+                        <div key={p.key} style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                          <span className="print-chip" style={{ width: 8, height: 8, borderRadius: "50%", background: entry?.[p.key] ? CORES[entry[p.key]].hex : "#E3DFD2", flexShrink: 0 }} />
+                          <span style={{ fontSize: 9, color: "#8A93A0" }}>{p.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: 16, marginTop: 18, flexWrap: "wrap" }}>
+                {Object.entries(CORES).map(([key, c]) => (
+                  <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#5C6672" }} className="print-legend-text">
+                    <span className="print-legend-dot" style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex }} />
+                    {c.label}
+                  </div>
+                ))}
+              </div>
+
+              {totalMarked > 0 && (
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #F0EBDF" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#B3AC9C", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+                    Resumo do mês (total de marcações)
+                  </div>
+                  <div style={{ display: "flex", height: 10, borderRadius: 4, overflow: "hidden", marginBottom: 10, background: "#F0EBDF" }}>
+                    {Object.entries(CORES).map(([key, c]) => (
+                      counts[key] > 0 && <div key={key} style={{ width: `${(counts[key] / totalMarked) * 100}%`, background: c.hex }} />
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 18 }}>
+                    {Object.entries(CORES).map(([key, c]) => (
+                      <div key={key} style={{ fontSize: 13, color: "#33404D" }}>
+                        <span style={{ fontWeight: 800 }}>{counts[key]}</span>
+                        <span style={{ color: "#8A93A0" }}> {c.label.toLowerCase()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
       {selected && (
-        <div onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, background: "rgba(51,64,77,0.35)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 420, boxShadow: "0 -8px 24px rgba(0,0,0,0.12)" }}>
+        <div onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, background: "rgba(51,64,77,0.35)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 50 }} className="no-print">
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: 20, width: "100%", maxWidth: 460, boxShadow: "0 -8px 24px rgba(0,0,0,0.12)", maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontWeight: 700, color: "#33404D", fontSize: 15 }}>
                 {Number(selected.split("-")[2])} de {MESES[Number(selected.split("-")[1]) - 1]}
@@ -273,31 +405,36 @@ export default function App() {
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              {Object.entries(CORES).map(([key, c]) => (
-                <button
-                  key={key}
-                  className="color-btn"
-                  onClick={() => setDay(selected, key)}
-                  style={{
-                    flex: 1,
-                    padding: "12px 8px",
-                    borderRadius: 14,
-                    border: data[selected]?.cor === key ? `2px solid ${c.hex}` : "1px solid #EDE8DB",
-                    background: data[selected]?.cor === key ? c.bg : "#FBFAF7",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.hex, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {data[selected]?.cor === key && <Check size={11} color="#fff" strokeWidth={3} />}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#33404D" }}>{c.label}</span>
-                </button>
-              ))}
-            </div>
+            {PERIODOS.map((p) => (
+              <div key={p.key} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#5C6672", marginBottom: 8 }}>{p.label}</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {Object.entries(CORES).map(([key, c]) => (
+                    <button
+                      key={key}
+                      className="color-btn"
+                      onClick={() => setPeriod(selected, p.key, key)}
+                      style={{
+                        flex: 1,
+                        padding: "10px 6px",
+                        borderRadius: 14,
+                        border: data[selected]?.[p.key] === key ? `2px solid ${c.hex}` : "1px solid #EDE8DB",
+                        background: data[selected]?.[p.key] === key ? c.bg : "#FBFAF7",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 5,
+                      }}
+                    >
+                      <span style={{ width: 18, height: 18, borderRadius: "50%", background: c.hex, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {data[selected]?.[p.key] === key && <Check size={12} color="#fff" strokeWidth={3} />}
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#33404D", textAlign: "center" }}>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
 
             <textarea
               value={noteDraft}
@@ -313,7 +450,7 @@ export default function App() {
               onClick={() => { saveNote(); setSelected(null); }}
               style={{ width: "100%", background: "#33404D", color: "#fff", border: "none", borderRadius: 12, padding: 13, fontWeight: 700, fontSize: 14 }}
             >
-              Salvar
+              Salvar observação
             </button>
           </div>
         </div>
