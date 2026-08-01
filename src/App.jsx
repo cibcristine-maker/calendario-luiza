@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart
 import { supabase } from "./supabaseClient";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import luizaFoto from "./assets/luiza.jpg";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -200,6 +201,11 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: "#F7F4EE", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "-apple-system, 'Segoe UI', Roboto, sans-serif" }}>
         <div style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 360, border: "1px solid #F0EBDF" }}>
+          <img
+            src={luizaFoto}
+            alt="Luiza"
+            style={{ width: 64, height: 64, borderRadius: "50%", objectFit: "cover", marginBottom: 12, boxShadow: "0 2px 8px rgba(51,64,77,0.15)" }}
+          />
           <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: "#A98F5E", fontWeight: 700, marginBottom: 6 }}>
             Diário de acompanhamento
           </div>
@@ -254,11 +260,18 @@ export default function App() {
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-end" }} className="no-print">
-          <div>
-            <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: "#A98F5E", fontWeight: 700, marginBottom: 4 }}>
-              Diário de acompanhamento
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img
+              src={luizaFoto}
+              alt="Luiza"
+              style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: "2px solid #fff", boxShadow: "0 2px 8px rgba(51,64,77,0.15)" }}
+            />
+            <div>
+              <div style={{ fontSize: 12, letterSpacing: 1.5, textTransform: "uppercase", color: "#A98F5E", fontWeight: 700, marginBottom: 4 }}>
+                Diário de acompanhamento
+              </div>
+              <h1 style={{ fontFamily: "Georgia, serif", fontSize: 30, color: "#33404D", margin: 0, fontWeight: 600 }}>Luiza</h1>
             </div>
-            <h1 style={{ fontFamily: "Georgia, serif", fontSize: 30, color: "#33404D", margin: 0, fontWeight: 600 }}>Luiza</h1>
           </div>
           <div style={{ fontSize: 11, color: "#B3AC9C" }}>{userName}</div>
         </div>
