@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer, Download, ListChecks, Lightbulb } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -22,6 +22,48 @@ const PERIODOS = [
   { key: "tarde", label: "Tarde" },
   { key: "noite", label: "Noite" },
 ];
+
+const PARAMETROS = [
+  {
+    titulo: "Comportamentos interferentes",
+    icone: "🎯",
+    azul: "Não arremessou itens; não bateu; não beliscou/arranhou.",
+    laranja: "Ocorreram episódios de arremessar itens, bater, beliscar ou arranhar.",
+    vermelho: "Episódios de arremessar itens, bater, beliscar ou arranhar.",
+  },
+  {
+    titulo: "Transições",
+    icone: "🚪",
+    azul: "Aceitou 90% ou mais das transições.",
+    laranja: "Apresentou dificuldade em algumas transições.",
+    vermelho: "Muita dificuldade nas transições.",
+  },
+  {
+    titulo: "Manejo",
+    icone: "⚙️",
+    azul: "Fácil manejo; aceitou redirecionamento rapidamente.",
+    laranja: "Manejo com certa dificuldade; precisou de maior mediação ou redirecionamento.",
+    vermelho: "Difícil manejo; demora significativa para aceitar ou redirecionar.",
+  },
+];
+
+const EXEMPLOS = {
+  azul: [
+    "Seguiu as orientações com facilidade",
+    "Guardou os brinquedos quando solicitado",
+    "Mudou de atividade sem resistência",
+  ],
+  laranja: [
+    "Jogou algo no chão",
+    "Bateu ou beliscou alguém",
+    "Precisou de lembretes para trocar de atividade",
+  ],
+  vermelho: [
+    "Jogou vários itens",
+    "Bateu/arranhou/beliscou com frequência",
+    "Resistiu muito para mudar de atividade e demorou para se acalmar",
+  ],
+};
 
 const PESSOAS = [
   { nome: "Eduardo", papel: "Pai" },
@@ -298,8 +340,19 @@ export default function App() {
           >
             <BarChart3 size={15} /> Dashboard
           </button>
+          <button
+            onClick={() => setTab("parametros")}
+            style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "10px 0", borderRadius: 12, border: tab === "parametros" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "parametros" ? "#33404D" : "#fff", color: tab === "parametros" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+            }}
+          >
+            <ListChecks size={15} /> Parâmetros
+          </button>
         </div>
 
+        {tab !== "parametros" && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }} className="no-print">
           <button onClick={() => changeMonth(-1)} aria-label="Mês anterior" style={{ background: "#fff", border: "1px solid #E7E1D4", borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <ChevronLeft size={18} color="#33404D" />
@@ -311,6 +364,7 @@ export default function App() {
             <ChevronRight size={18} color="#33404D" />
           </button>
         </div>
+        )}
 
         {tab === "calendario" && (
           <>
@@ -461,6 +515,65 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          </>
+        )}
+        {tab === "parametros" && (
+          <>
+            <div style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginBottom: 14 }}>
+              <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#33404D", fontWeight: 600, marginBottom: 4 }}>
+                Registro de humor e comportamentos
+              </div>
+              <div style={{ fontSize: 12, color: "#8A93A0" }}>Escolha 1 cor que melhor representa o dia</div>
+            </div>
+
+            {PARAMETROS.map((cat) => (
+              <div key={cat.titulo} style={{ background: "#fff", borderRadius: 20, padding: 16, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 16 }}>{cat.icone}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#33404D", textTransform: "uppercase", letterSpacing: 0.5 }}>{cat.titulo}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {Object.entries(CORES).map(([key, c]) => (
+                    <div key={key} style={{ display: "flex", gap: 10, alignItems: "flex-start", background: c.bg, borderRadius: 12, padding: "8px 10px" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex, marginTop: 4, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: c.hex, marginBottom: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{key}</div>
+                        <div style={{ fontSize: 13, color: "#33404D", lineHeight: 1.4 }}>{cat[key]}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div style={{ background: "#fff", borderRadius: 20, padding: 16, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 16 }}>📋</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#33404D", textTransform: "uppercase", letterSpacing: 0.5 }}>Exemplos</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(CORES).map(([key, c]) => (
+                  <div key={key} style={{ background: c.bg, borderRadius: 12, padding: "8px 10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: c.hex }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: c.hex, textTransform: "uppercase", letterSpacing: 0.5 }}>{key}</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {EXEMPLOS[key].map((ex, i) => (
+                        <li key={i} style={{ fontSize: 13, color: "#33404D", lineHeight: 1.5 }}>{ex}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ background: "#FBF8F0", borderRadius: 16, padding: 14, border: "1px solid #F0EBDF", display: "flex", gap: 10 }}>
+              <Lightbulb size={18} color="#A98F5E" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div style={{ fontSize: 12, color: "#5C6672", lineHeight: 1.5 }}>
+                <strong style={{ color: "#33404D" }}>Como usar:</strong> Observe o dia de Luiza e marque apenas 1 cor que melhor representa o dia. Registrar a cor ajuda a acompanhar os padrões e avanços ao longo do tempo.
+              </div>
             </div>
           </>
         )}
