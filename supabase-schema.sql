@@ -20,3 +20,8 @@ create policy "allow delete" on entries for delete using (true);
 
 -- Habilita realtime (edições aparecem na hora para as duas)
 alter publication supabase_realtime add table entries;
+
+-- Migração: antecedentes por período (rode isto no SQL Editor do Supabase)
+alter table entries add column if not exists manha_antecedente text;
+alter table entries add column if not exists tarde_antecedente text;
+alter table entries add column if not exists noite_antecedente text;

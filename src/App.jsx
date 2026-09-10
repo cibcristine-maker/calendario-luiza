@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer, Download, ListChecks, Lightbulb } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Check, Calendar as CalendarIcon, BarChart3, Printer, Download, ListChecks, Lightbulb, HelpCircle, CircleSlash } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -65,6 +65,87 @@ const EXEMPLOS = {
   ],
 };
 
+const ANTECEDENTES = [
+  {
+    key: "atencao",
+    label: "Atenção",
+    emoji: "👥",
+    hex: "#5B8FB0",
+    bg: "#EAF2F7",
+    desc: "Quando a Luiza está buscando atenção de outras pessoas.",
+    exemplos: [
+      "Você está conversando com outra pessoa.",
+      "Está no telefone.",
+      "Está trabalhando.",
+      "Não consegue dar atenção naquele momento.",
+    ],
+  },
+  {
+    key: "demanda",
+    label: "Demanda",
+    emoji: "📋",
+    hex: "#C6604F",
+    bg: "#F6E9E6",
+    desc: "Quando é solicitada uma tarefa, instrução ou acontece uma transição.",
+    exemplos: [
+      "Foi pedido para fazer um dever de casa.",
+      "Foi orientada a parar uma atividade preferida.",
+      "Precisa esperar.",
+      "É hora de se arrumar, sair, tomar banho ou ir para a escola.",
+    ],
+  },
+  {
+    key: "tangivel",
+    label: "Tangível",
+    emoji: "🧸",
+    hex: "#5B9B76",
+    bg: "#E8F2EC",
+    desc: "Quando a Luiza quer algo e não recebe, ou o acesso é negado/retirado.",
+    exemplos: [
+      "Pediu o tablet e não recebeu.",
+      "O tempo de tela acabou.",
+      "Um brinquedo foi guardado.",
+      "Não pode comer algo que queria.",
+    ],
+  },
+  {
+    key: "sensorial",
+    label: "Sensorial",
+    emoji: "🔊",
+    hex: "#8A6FB0",
+    bg: "#EFEAF6",
+    desc: "Quando há muitos estímulos no ambiente ou o comportamento parece acontecer sem motivo social claro.",
+    exemplos: [
+      "Ambiente muito barulhento.",
+      "Muitas pessoas.",
+      "Muitas informações visuais.",
+      "Parece busca de sensação (sem ligação com demanda, atenção ou objeto).",
+    ],
+  },
+  {
+    key: "desconforto",
+    label: "Desconforto interno",
+    emoji: "😣",
+    hex: "#D9A73B",
+    bg: "#FBF3E3",
+    desc: "Quando a Luiza pode estar com algum desconforto físico ou emocional.",
+    exemplos: [
+      "Parece cansada.",
+      "Está com fome ou sede.",
+      "Não dormiu bem.",
+      "Está doente, irritada ou ansiosa.",
+    ],
+  },
+];
+
+const NENHUM_ANTECEDENTE = { key: "nenhum", label: "Nenhum identificado", emoji: "✔️", hex: "#8A93A0", bg: "#EFECE3" };
+
+const ANTECEDENTE_OPCOES = [...ANTECEDENTES, NENHUM_ANTECEDENTE];
+
+function antecedenteInfo(key) {
+  return ANTECEDENTE_OPCOES.find((a) => a.key === key) || null;
+}
+
 const PESSOAS = [
   { nome: "Eduardo", papel: "Pai" },
   { nome: "Cibele", papel: "Mãe" },
@@ -79,7 +160,7 @@ function fmtKey(y, m, d) {
 }
 
 function isEmptyEntry(e) {
-  return !e || (!e.manha && !e.tarde && !e.noite && !e.nota);
+  return !e || (!e.manha && !e.tarde && !e.noite && !e.nota && !e.manha_antecedente && !e.tarde_antecedente && !e.noite_antecedente);
 }
 
 export default function App() {
@@ -102,7 +183,10 @@ export default function App() {
       if (!error && rows) {
         const map = {};
         rows.forEach((r) => {
-          map[r.date] = { manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by };
+          map[r.date] = {
+            manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by,
+            manha_antecedente: r.manha_antecedente, tarde_antecedente: r.tarde_antecedente, noite_antecedente: r.noite_antecedente,
+          };
         });
         setData(map);
       }
@@ -120,7 +204,10 @@ export default function App() {
             delete next[payload.old.date];
           } else {
             const r = payload.new;
-            next[r.date] = { manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by };
+            next[r.date] = {
+              manha: r.manha, tarde: r.tarde, noite: r.noite, nota: r.nota, updated_by: r.updated_by,
+              manha_antecedente: r.manha_antecedente, tarde_antecedente: r.tarde_antecedente, noite_antecedente: r.noite_antecedente,
+            };
           }
           return next;
         });
@@ -150,15 +237,31 @@ export default function App() {
       nota: entry.nota || null,
       updated_by: userName || null,
       updated_at: new Date().toISOString(),
+      manha_antecedente: entry.manha_antecedente || null,
+      tarde_antecedente: entry.tarde_antecedente || null,
+      noite_antecedente: entry.noite_antecedente || null,
     };
     await supabase.from("entries").upsert(record);
-    setData((prev) => ({ ...prev, [key]: { manha: entry.manha || null, tarde: entry.tarde || null, noite: entry.noite || null, nota: entry.nota || null, updated_by: userName || null } }));
+    setData((prev) => ({
+      ...prev,
+      [key]: {
+        manha: entry.manha || null, tarde: entry.tarde || null, noite: entry.noite || null, nota: entry.nota || null, updated_by: userName || null,
+        manha_antecedente: entry.manha_antecedente || null, tarde_antecedente: entry.tarde_antecedente || null, noite_antecedente: entry.noite_antecedente || null,
+      },
+    }));
   }, [userName]);
 
   const setPeriod = (key, periodKey, color) => {
     const current = data[key] || {};
     const newColor = current[periodKey] === color ? null : color;
     persistEntry(key, { ...current, [periodKey]: newColor });
+  };
+
+  const setAntecedente = (key, periodKey, antKey) => {
+    const current = data[key] || {};
+    const field = `${periodKey}_antecedente`;
+    const newVal = current[field] === antKey ? null : antKey;
+    persistEntry(key, { ...current, [field]: newVal });
   };
 
   const saveNote = () => {
@@ -190,6 +293,16 @@ export default function App() {
     PERIODOS.forEach((p) => { if (v[p.key]) counts[v[p.key]]++; });
   });
   const totalMarked = counts.azul + counts.laranja + counts.vermelho;
+
+  const antCounts = {};
+  ANTECEDENTE_OPCOES.forEach((a) => { antCounts[a.key] = 0; });
+  monthEntries.forEach(([, v]) => {
+    PERIODOS.forEach((p) => {
+      const val = v[`${p.key}_antecedente`];
+      if (val && antCounts[val] !== undefined) antCounts[val]++;
+    });
+  });
+  const totalAntMarked = Object.values(antCounts).reduce((a, b) => a + b, 0);
 
   const diasRuins = [];
   for (let d = 1; d <= daysInMonth; d++) {
@@ -319,40 +432,50 @@ export default function App() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }} className="no-print">
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }} className="no-print">
           <button
             onClick={() => setTab("calendario")}
             style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              padding: "10px 0", borderRadius: 12, border: tab === "calendario" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
-              background: tab === "calendario" ? "#33404D" : "#fff", color: tab === "calendario" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+              flex: "1 1 42%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "9px 0", borderRadius: 12, border: tab === "calendario" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "calendario" ? "#33404D" : "#fff", color: tab === "calendario" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 12,
             }}
           >
-            <CalendarIcon size={15} /> Calendário
+            <CalendarIcon size={14} /> Calendário
           </button>
           <button
             onClick={() => setTab("dashboard")}
             style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              padding: "10px 0", borderRadius: 12, border: tab === "dashboard" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
-              background: tab === "dashboard" ? "#33404D" : "#fff", color: tab === "dashboard" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+              flex: "1 1 42%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "9px 0", borderRadius: 12, border: tab === "dashboard" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "dashboard" ? "#33404D" : "#fff", color: tab === "dashboard" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 12,
             }}
           >
-            <BarChart3 size={15} /> Dashboard
+            <BarChart3 size={14} /> Dashboard
           </button>
           <button
             onClick={() => setTab("parametros")}
             style={{
-              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              padding: "10px 0", borderRadius: 12, border: tab === "parametros" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
-              background: tab === "parametros" ? "#33404D" : "#fff", color: tab === "parametros" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 13,
+              flex: "1 1 42%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "9px 0", borderRadius: 12, border: tab === "parametros" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "parametros" ? "#33404D" : "#fff", color: tab === "parametros" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 12,
             }}
           >
-            <ListChecks size={15} /> Parâmetros
+            <ListChecks size={14} /> Parâmetros
+          </button>
+          <button
+            onClick={() => setTab("antecedentes")}
+            style={{
+              flex: "1 1 42%", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              padding: "9px 0", borderRadius: 12, border: tab === "antecedentes" ? "1.5px solid #33404D" : "1px solid #E7E1D4",
+              background: tab === "antecedentes" ? "#33404D" : "#fff", color: tab === "antecedentes" ? "#fff" : "#33404D", fontWeight: 700, fontSize: 12,
+            }}
+          >
+            <HelpCircle size={14} /> Antecedentes
           </button>
         </div>
 
-        {tab !== "parametros" && (
+        {tab !== "parametros" && tab !== "antecedentes" && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }} className="no-print">
           <button onClick={() => changeMonth(-1)} aria-label="Mês anterior" style={{ background: "#fff", border: "1px solid #E7E1D4", borderRadius: 12, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <ChevronLeft size={18} color="#33404D" />
@@ -516,6 +639,26 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            <div style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginTop: 14 }} className="no-print">
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#B3AC9C", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+                Antecedentes do mês
+              </div>
+              {totalAntMarked === 0 && (
+                <div style={{ fontSize: 13, color: "#8A93A0" }}>Nenhum antecedente marcado ainda este mês.</div>
+              )}
+              {totalAntMarked > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {ANTECEDENTE_OPCOES.filter((a) => antCounts[a.key] > 0).map((a) => (
+                    <div key={a.key} style={{ display: "flex", alignItems: "center", gap: 10, background: a.bg, borderRadius: 10, padding: "8px 12px" }}>
+                      <span style={{ fontSize: 15 }}>{a.emoji}</span>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#33404D" }}>{a.label}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: a.hex }}>{antCounts[a.key]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
         {tab === "parametros" && (
@@ -577,6 +720,43 @@ export default function App() {
             </div>
           </>
         )}
+        {tab === "antecedentes" && (
+          <>
+            <div style={{ background: "#fff", borderRadius: 20, padding: 18, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginBottom: 14 }}>
+              <div style={{ fontFamily: "Georgia, serif", fontSize: 18, color: "#33404D", fontWeight: 600, marginBottom: 4 }}>
+                O que aconteceu ANTES?
+              </div>
+              <div style={{ fontSize: 12, color: "#8A93A0" }}>
+                Registrar o que aconteceu antes do comportamento da Luiza ajuda a entender melhor o que pode estar motivando. Baseado nas categorias do QABF (Paclawskyj et al., 2000).
+              </div>
+            </div>
+
+            {ANTECEDENTES.map((a) => (
+              <div key={a.key} style={{ background: "#fff", borderRadius: 20, padding: 16, boxShadow: "0 4px 18px rgba(51,64,77,0.06)", border: "1px solid #F0EBDF", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>{a.emoji}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: a.hex, textTransform: "uppercase", letterSpacing: 0.5 }}>{a.label}</span>
+                </div>
+                <div style={{ background: a.bg, borderRadius: 12, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 13, color: "#33404D", lineHeight: 1.4, marginBottom: 8 }}>{a.desc}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: a.hex, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Exemplos</div>
+                  <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {a.exemplos.map((ex, i) => (
+                      <li key={i} style={{ fontSize: 12.5, color: "#33404D", lineHeight: 1.5 }}>{ex}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ background: "#FBF8F0", borderRadius: 16, padding: 14, border: "1px solid #F0EBDF", display: "flex", gap: 10 }}>
+              <CircleSlash size={18} color="#A98F5E" style={{ flexShrink: 0, marginTop: 1 }} />
+              <div style={{ fontSize: 12, color: "#5C6672", lineHeight: 1.5 }}>
+                <strong style={{ color: "#33404D" }}>Não identificou o que aconteceu antes?</strong> Tudo bem! Você também pode marcar "Nenhum identificado" na marcação diária.
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {selected && (
@@ -618,6 +798,31 @@ export default function App() {
                       <span style={{ fontSize: 10, fontWeight: 700, color: "#33404D", textAlign: "center" }}>{c.label}</span>
                     </button>
                   ))}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#8A93A0" }}>Antecedente (opcional)</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {ANTECEDENTE_OPCOES.map((a) => {
+                    const active = data[selected]?.[`${p.key}_antecedente`] === a.key;
+                    return (
+                      <button
+                        key={a.key}
+                        className="color-btn"
+                        onClick={() => setAntecedente(selected, p.key, a.key)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 5,
+                          padding: "6px 10px", borderRadius: 20,
+                          border: active ? `1.5px solid ${a.hex}` : "1px solid #EDE8DB",
+                          background: active ? a.bg : "#FBFAF7",
+                        }}
+                      >
+                        <span style={{ fontSize: 12 }}>{a.emoji}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: active ? a.hex : "#5C6672" }}>{a.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
